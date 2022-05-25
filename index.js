@@ -1,17 +1,35 @@
 const express = require("express");
+var fs = require('fs');
 const app = express();
-const http = require("http").Server(app);
+// const http = require("http").Server(app);
+var https = require('https');
 var cors = require("cors");
 // const io = require("socket.io")(http);
 app.use(cors());
 
-const io = require("socket.io")(http, {
+var options = {
+  key: fs.readFileSync('./file.pem'),
+  cert: fs.readFileSync('./file.crt')
+};
+
+var server = https.createServer(options, app);
+
+// const io = require("socket.io")(http, {
+//   cors: {
+//     // Avoid allowing all origins.
+//     origin: "*",
+//     methods: ["GET", "POST"],
+//   },
+// });
+
+var io = require('socket.io')(server, {
   cors: {
     // Avoid allowing all origins.
     origin: "*",
-    methods: ["GET", "POST"],
+    // methods: ["GET", "POST"],
   },
 });
+
 const port = process.env.PORT || 3001;
 const redis = require("redis");
 
@@ -24,8 +42,11 @@ app.get("/", (req, res) => {
 const patients = io.of("/patients");
 const physicians = io.of("/physicians");
 
-// Initialize redis client.
-const client = redis.createClient();
+// Initialize docker-compose redis service client. for docker host address: host.docker.internal
+const client = redis.createClient(
+{  url: 'redis://redis'
+}
+);
 client.on("error", (err) => console.log("Redis Client Error", err));
 (async () => {
   await client.connect();
@@ -120,6 +141,6 @@ io.on("connection", (socket) => {
   });
 });
 
-http.listen(port, () => {
+server.listen(port, () => {
   console.log(`Socket.IO server running at http://localhost:${port}/`);
 });

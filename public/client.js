@@ -70,17 +70,17 @@ physicistsSocket.on('emotion', function(msg) {
 // }, 10000)
 
 //  socket.emit('subscribe','test');
-socket.connect()
+patientsSocket.connect()
 
 
-setTimeout(() => {
-  socket.disconnect()
-}, 10000)
-socket.sendBuffer = [];
-socket.off();
-setTimeout(() => {
-  socket.disconnect()
-}, 12000)
+// setTimeout(() => {
+//   socket.disconnect()
+// }, 10000)
+// socket.sendBuffer = [];
+// socket.off();
+// setTimeout(() => {
+//   socket.disconnect()
+// }, 12000)
 // setTimeout(() => {
 //   socket.connect()
 // }, 12000)
