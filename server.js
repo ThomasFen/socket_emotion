@@ -24,11 +24,18 @@ app.get("/", (req, res) => {
 const patients = io.of("/patients");
 const physicians = io.of("/physicians");
 
-// Initialize redis client.
-const client = redis.createClient();
-client.on("error", (err) => console.log("Redis Client Error", err));
+// Initialize redis cluster.
+const cluster = redis.createCluster({
+  rootNodes: [
+    {
+      url: 'redis://redis-cluster:6379'
+    }
+  ]
+});
+
+cluster.on("error", (err) => console.log("Redis cluster Error", err));
 (async () => {
-  await client.connect();
+  await cluster.connect();
 })();
 
 // consume new elements of output emotion stream
@@ -37,7 +44,7 @@ async function streamConsumer() {
   let patientId;
   while (true) {
     try {
-      let response = await client.xRead(
+      let response = await cluster.xRead(
         redis.commandOptions({
           isolated: true,
         }),
@@ -78,8 +85,8 @@ patients.on("connection", (socket) => {
   // Add image to redis' input stream.
   socket.on("image", (msg) => {
     console.info(msg.image.byteLength);
-    client.xAdd("input:room:all", "*", msg, "MAXLEN", "~", "1000");
-    // client.set('dec', msg)
+    cluster.xAdd("input:room:all", "*", msg, "MAXLEN", "~", "1000");
+    // cluster.set('dec', msg)
   });
 
   socket.on("disconnect", (reason) => {
