@@ -1,17 +1,34 @@
 const express = require("express");
+var fs = require('fs');
 const app = express();
-const http = require("http").Server(app);
+var https = require('https');
 var cors = require("cors");
 // const io = require("socket.io")(http);
 app.use(cors());
 
-const io = require("socket.io")(http, {
+var options = {
+  key: fs.readFileSync('./file.pem'),
+  cert: fs.readFileSync('./file.crt')
+};
+
+var server = https.createServer(options, app);
+
+// const io = require("socket.io")(http, {
+//   cors: {
+//     // Avoid allowing all origins.
+//     origin: "*",
+//     methods: ["GET", "POST"],
+//   },
+// });
+
+var io = require('socket.io')(server, {
   cors: {
     // Avoid allowing all origins.
     origin: "*",
-    methods: ["GET", "POST"],
+    // methods: ["GET", "POST"],
   },
 });
+
 const port = process.env.PORT || 3001;
 const redis = require("redis");
 
@@ -134,6 +151,6 @@ io.on("connection", (socket) => {
   });
 });
 
-http.listen(port, () => {
+server.listen(port, () => {
   console.log(`Socket.IO server running at http://localhost:${port}/`);
 });
