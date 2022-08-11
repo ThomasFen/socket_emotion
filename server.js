@@ -28,7 +28,13 @@ const physicians = io.of("/physicians");
 const cluster = redis.createCluster({
   rootNodes: [
     {
-      url: 'redis://redis-cluster:6379'
+      url: 'redis://redis-cluster-0.redis-cluster:6379'
+    },
+    {
+      url: 'redis://redis-cluster-1.redis-cluster:6379'
+    },
+    {
+      url: 'redis://redis-cluster-2.redis-cluster:6379'
     }
   ]
 });
@@ -36,6 +42,8 @@ const cluster = redis.createCluster({
 cluster.on("error", (err) => console.log("Redis cluster Error", err));
 (async () => {
   await cluster.connect();
+  streamConsumer();
+
 })();
 
 // consume new elements of output emotion stream
@@ -52,14 +60,14 @@ async function streamConsumer() {
           // XREAD can read from multiple streams, starting at a
           // different ID for each...
           {
-            key: "output:room:all",
+            key: "main:results",
             id: currentId,
           },
         ],
         {
           // Read 1 entry at a time, block forever if there are none.
           COUNT: 1,
-          BLOCK: 0,
+          BLOCK: 50000,
         }
       );
 
@@ -67,7 +75,7 @@ async function streamConsumer() {
         patientId = response[0].messages[0].message.userId;
         physicians
           .to(patientId)
-          .volatile.emit("emotion", response[0].messages[0].message.emotion);
+          .volatile.emit("emotion", response[0].messages[0].message.emotions);
         // Get the ID of the first (only) entry returned.
         currentId = response[0].messages[0].id;
       }
@@ -77,7 +85,6 @@ async function streamConsumer() {
   }
 }
 
-streamConsumer();
 
 // Handle patient connections.
 patients.on("connection", (socket) => {
@@ -85,7 +92,7 @@ patients.on("connection", (socket) => {
   // Add image to redis' input stream.
   socket.on("image", (msg) => {
     console.info(msg.image.byteLength);
-    cluster.xAdd("input:room:all", "*", msg, "MAXLEN", "~", "1000");
+    cluster.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
     // cluster.set('dec', msg)
   });
 
