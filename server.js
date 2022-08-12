@@ -9,7 +9,7 @@ const io = require("socket.io")(http, {
   cors: {
     // Avoid allowing all origins.
     origin: "*",
-    methods: ["GET", "POST"],
+    // methods: ["GET", "POST"],
   },
 });
 const port = process.env.PORT || 3001;
@@ -91,7 +91,7 @@ patients.on("connection", (socket) => {
   console.log("patient connected");
   // Add image to redis' input stream.
   socket.on("image", (msg) => {
-    console.info(msg.image.byteLength);
+    console.info(msg.img.byteLength);
     cluster.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
     // cluster.set('dec', msg)
   });
