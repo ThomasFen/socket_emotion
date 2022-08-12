@@ -24,24 +24,15 @@ app.get("/", (req, res) => {
 const patients = io.of("/patients");
 const physicians = io.of("/physicians");
 
-// Initialize redis cluster.
-const cluster = redis.createCluster({
-  rootNodes: [
-    {
-      url: 'redis://redis-cluster-0.redis-cluster:6379'
-    },
-    {
-      url: 'redis://redis-cluster-1.redis-cluster:6379'
-    },
-    {
-      url: 'redis://redis-cluster-2.redis-cluster:6379'
-    }
-  ]
-});
+// Initialize redis client.
+const client = redis.createClient(
+  {  url: 'redis://redis-service'
+  }
+  );
 
-cluster.on("error", (err) => console.log("Redis cluster Error", err));
+client.on("error", (err) => console.log("Redis client Error", err));
 (async () => {
-  await cluster.connect();
+  await client.connect();
   streamConsumer();
 
 })();
@@ -52,7 +43,7 @@ async function streamConsumer() {
   let patientId;
   while (true) {
     try {
-      let response = await cluster.xRead(
+      let response = await client.xRead(
         redis.commandOptions({
           isolated: true,
         }),
@@ -92,8 +83,8 @@ patients.on("connection", (socket) => {
   // Add image to redis' input stream.
   socket.on("image", (msg) => {
     console.info(msg.img.byteLength);
-    cluster.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
-    // cluster.set('dec', msg)
+    client.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
+    // client.set('dec', msg)
   });
 
   socket.on("disconnect", (reason) => {
