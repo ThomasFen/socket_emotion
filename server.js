@@ -56,7 +56,7 @@ async function streamConsumer() {
           },
         ],
         {
-          // Read 1 entry at a time, block forever if there are none.
+          // Read 1 entry at a time, block for 5 seconds if there are none.
           COUNT: 1,
           BLOCK: 50000,
         }
