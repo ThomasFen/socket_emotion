@@ -26,7 +26,7 @@ const physicians = io.of("/physicians");
 
 // Initialize redis client.
 const client = redis.createClient(
-  {  url: 'redis://redis-service'
+  {  url: 'redis://myredis-headless'
   }
   );
 
