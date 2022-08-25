@@ -13,6 +13,12 @@ const io = require("socket.io")(http, {
   },
 });
 const port = process.env.PORT || 3001;
+const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || 'true';
+const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
+const CELERY_BROKER_URL = process.env.CELERY_BROKER_URL || 'amqp://admin:mypass@rabbitmq-service:5672';
+const CELERY_RESULT_BACKEND = process.env.CELERY_RESULT_BACKEND || 'redis://myredis-headless:6379/0';
+
+
 const redis = require("redis");
 
 app.use(express.static(__dirname + "/public"));
@@ -20,22 +26,33 @@ app.get("/", (req, res) => {
   res.sendFile("/index.html");
 });
 
+const celery = require('celery-node');
+
+if(celeryWorkerEnabled === 'true'){
+  var celery_app = celery.createClient(
+    CELERY_BROKER_URL,
+    CELERY_RESULT_BACKEND
+  );
+}
+
 // Set up patient and physicist namespaces.
 const patients = io.of("/patients");
 const physicians = io.of("/physicians");
 
 // Initialize redis client.
-const client = redis.createClient(
-  {  url: 'redis://myredis-headless'
-  }
-  );
-
-client.on("error", (err) => console.log("Redis client Error", err));
-(async () => {
-  await client.connect();
-  streamConsumer();
-
-})();
+if(redisWorkerEnabled === 'true'){
+  var client = redis.createClient(
+    {  url: 'redis://myredis-headless'
+    }
+    );
+  
+  client.on("error", (err) => console.log("Redis client Error", err));
+  (async () => {
+    await client.connect();
+    streamConsumer();
+  
+  })();
+}
 
 // consume new elements of output emotion stream
 async function streamConsumer() {
@@ -64,6 +81,7 @@ async function streamConsumer() {
 
       if (response) {
         patientId = response[0].messages[0].message.userId;
+        console.log(response[0].messages[0].message);
         physicians
           .to(patientId)
           .volatile.emit("emotion", response[0].messages[0].message.emotions);
@@ -80,13 +98,22 @@ async function streamConsumer() {
 // Handle patient connections.
 patients.on("connection", (socket) => {
   console.log("patient connected");
-  // Add image to redis' input stream.
+  // Add image to redis' input stream and/or celery worker.
   socket.on("image", (msg) => {
     console.info(msg.img.byteLength);
-    client.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
+
+    if(redisWorkerEnabled === 'true'){
+      client.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
+
+    }
+    if(celeryWorkerEnabled === 'true'){
+      request = {"usr": msg.userId, "image": msg.img}
+      celery_app.sendTask("tasks.EmotionRecognition", undefined, {'request': request} )
+    }
     // client.set('dec', msg)
   });
 
+    
   socket.on("disconnect", (reason) => {
     console.log("patient disconnected");
   });
@@ -108,9 +135,25 @@ physicians.on("connection", function (socket) {
   });
 });
 
+
+
 // Handle all connections. For testing purposes.
 io.on("connection", (socket) => {
   console.log("main namespace connected");
+
+// Handle incoming messages from celery worker.
+socket.on("send_result_to_server", (msg) => {
+  for (const patientResult of msg.data) {
+    console.log(patientResult);
+    const  patientId = patientResult.userId;
+    physicians
+      .to(patientId)
+      .volatile.emit("emotion", patientResult.emotions);
+  }
+  
+
+
+});
 
   socket.on("chat message", (msg) => {
     // io.emit("chat message", msg);
