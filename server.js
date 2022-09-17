@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const http = require("http").Server(app);
 var cors = require("cors");
-// const io = require("socket.io")(http);
+var FormData = require('form-data');
 app.use(cors());
 
 const io = require("socket.io")(http, {
@@ -15,6 +15,7 @@ const io = require("socket.io")(http, {
 const port = process.env.PORT || 3001;
 const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || 'true';
 const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
+const bentoWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
 const CELERY_BROKER_URL = process.env.CELERY_BROKER_URL || 'amqp://admin:mypass@rabbitmq-service:5672';
 const CELERY_RESULT_BACKEND = process.env.CELERY_RESULT_BACKEND || 'redis://myredis-headless:6379/0';
 
@@ -96,11 +97,11 @@ async function streamConsumer() {
 
 
 // Handle patient connections.
-patients.on("connection", (socket) => {
+ patients.on("connection", (socket) => {
   console.log("patient connected");
   // Add image to redis' input stream and/or celery worker.
-  socket.on("image", (msg) => {
-    console.info(msg.img.byteLength);
+  socket.on("image",  (msg) => {
+    console.info(`Image of size ${msg.img.byteLength} received.`);
 
     if(redisWorkerEnabled === 'true'){
       client.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
@@ -110,7 +111,31 @@ patients.on("connection", (socket) => {
       request = {"usr": msg.userId, "image": msg.img}
       celery_app.sendTask("tasks.EmotionRecognition", undefined, {'request': request} )
     }
-    // client.set('dec', msg)
+    if(bentoWorkerEnabled === 'true'){
+      const formData = new FormData()
+      const annotations = {userId: msg.userId, conferenceId: msg.conferenceId }
+
+      formData.append('annotations', JSON.stringify(annotations))
+      formData.append('image', msg.img, 'patient.png')
+
+
+    formData.submit('http://emotion-analyzer-yatai.127.0.0.1.sslip.io/predict_async', function(err, res) {
+      const body = []
+      res.on('data', 
+        (chunk) => body.push(chunk)
+      );
+      res.on('end', () => {
+        const resString = Buffer.concat(body).toString()
+        const emotions = JSON.parse(resString).emotions
+        physicians
+        .to(emotions.userId)
+        .volatile.emit("emotion", JSON.stringify(emotions));
+      })
+    });
+
+
+    }
+
   });
 
     

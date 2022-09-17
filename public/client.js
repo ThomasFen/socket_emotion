@@ -1,9 +1,7 @@
 
 const socket = io( {
-  autoConnect: false,
 }); // or io("/"), the main namespace
 const patientsSocket = io("/patients", {
-  autoConnect: false,
 }); // the "patients" namespace
 const physicistsSocket = io("/physicists", {
   autoConnect: false,
@@ -22,11 +20,12 @@ function handleFiles(e) {
   const fileList = this.files; /* now you can work with the file list */
   const reader = new FileReader();
   reader.onload = function(evt) {
-    const bytes = new Uint8Array(evt.target.result);
+    // const bytes = new Uint8Array(evt.target.result);
+    const image = new Blob([evt.target.result], { type: 'image/png' } )
     patientsSocket.emit('image', {
       userId: '425234-234897234-234897',
-      room: 'test',
-      image: bytes,
+      conferenceId: 'test',
+      img: image,
     });
     
   };
@@ -70,17 +69,17 @@ physicistsSocket.on('emotion', function(msg) {
 // }, 10000)
 
 //  socket.emit('subscribe','test');
-socket.connect()
+// socket.connect()
 
 
-setTimeout(() => {
-  socket.disconnect()
-}, 10000)
-socket.sendBuffer = [];
-socket.off();
-setTimeout(() => {
-  socket.disconnect()
-}, 12000)
+// setTimeout(() => {
+//   socket.disconnect()
+// }, 10000)
+// socket.sendBuffer = [];
+// socket.off();
+// setTimeout(() => {
+//   socket.disconnect()
+// }, 12000)
 // setTimeout(() => {
 //   socket.connect()
 // }, 12000)
