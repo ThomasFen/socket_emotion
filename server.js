@@ -18,6 +18,8 @@ const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
 const bentoWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
 const CELERY_BROKER_URL = process.env.CELERY_BROKER_URL || 'amqp://admin:mypass@rabbitmq-service:5672';
 const CELERY_RESULT_BACKEND = process.env.CELERY_RESULT_BACKEND || 'redis://myredis-headless:6379/0';
+const YATAI_DEPLOYMENT_URL = process.env.YATAI_DEPLOYMENT_URL || 'http://emotion-analyzer-yatai.127.0.0.1.sslip.io/predict_async';
+
 
 
 const redis = require("redis");
@@ -119,7 +121,7 @@ async function streamConsumer() {
       formData.append('image', msg.img, 'patient.png')
 
 
-    formData.submit('http://emotion-analyzer-yatai.127.0.0.1.sslip.io/predict_async', function(err, res) {
+    formData.submit(YATAI_DEPLOYMENT_URL, function(err, res) {
       const body = []
       res.on('data', 
         (chunk) => body.push(chunk)
