@@ -16,6 +16,7 @@ const port = process.env.PORT || 3001;
 const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || 'true';
 const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
 const bentoWorkerEnabled = process.env.ENABLE_BENTOML_WORKER || 'false';
+const REDIS_URL = process.env.REDIS_URL || 'redis://myredis-headless';
 const CELERY_BROKER_URL = process.env.CELERY_BROKER_URL || 'amqp://admin:mypass@rabbitmq-service:5672';
 const CELERY_RESULT_BACKEND = process.env.CELERY_RESULT_BACKEND || 'redis://myredis-headless:6379/0';
 const YATAI_DEPLOYMENT_URL = process.env.YATAI_DEPLOYMENT_URL || 'http://emotion-analyzer-yatai.127.0.0.1.sslip.io/predict_async';
@@ -45,7 +46,7 @@ const physicians = io.of("/physicians");
 // Initialize redis client.
 if(redisWorkerEnabled === 'true'){
   var client = redis.createClient(
-    {  url: 'redis://myredis-headless'
+    {  url: REDIS_URL
     }
     );
   
