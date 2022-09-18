@@ -10,7 +10,7 @@ const io = require("socket.io")(http, {
     // Avoid allowing all origins.
     origin: "*",
     // methods: ["GET", "POST"],
-  },
+  }, maxHttpBufferSize: 1e8,
 });
 const port = process.env.PORT || 3001;
 const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || 'true';
@@ -85,6 +85,7 @@ async function streamConsumer() {
 
       if (response) {
         patientId = response[0].messages[0].message.userId;
+        console.log('Received Redis Worker Result:')
         console.log(response[0].messages[0].message);
         physicians
           .to(patientId)
@@ -104,6 +105,10 @@ async function streamConsumer() {
   console.log("patient connected");
   // Add image to redis' input stream and/or celery worker.
   socket.on("image",  (msg) => {
+    if (typeof msg.img === 'undefined') {
+      console.log('Warning: Image event got triggered without an image attached.')
+      return;
+    }
     console.info(`Image of size ${msg.img.byteLength} received.`);
 
     if(redisWorkerEnabled === 'true'){
@@ -130,6 +135,8 @@ async function streamConsumer() {
       res.on('end', () => {
         const resString = Buffer.concat(body).toString()
         const emotions = JSON.parse(resString).emotions
+        console.log('Received BentoML Worker Result:')
+        console.log(emotions)
         physicians
         .to(emotions.userId)
         .volatile.emit("emotion", JSON.stringify(emotions));
@@ -143,7 +150,7 @@ async function streamConsumer() {
 
     
   socket.on("disconnect", (reason) => {
-    console.log("patient disconnected");
+    console.log(`patient disconnected. Reason: ${reason}`);
   });
 });
 
@@ -172,6 +179,7 @@ io.on("connection", (socket) => {
 // Handle incoming messages from celery worker.
 socket.on("send_result_to_server", (msg) => {
   for (const patientResult of msg.data) {
+    console.log('Received Celery Worker Result:')
     console.log(patientResult);
     const  patientId = patientResult.userId;
     physicians
