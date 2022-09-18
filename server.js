@@ -13,13 +13,13 @@ const io = require("socket.io")(http, {
   }, maxHttpBufferSize: 1e8,
 });
 const port = process.env.PORT || 3001;
-const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || 'true';
+const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || 'false';
 const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || 'false';
-const bentoWorkerEnabled = process.env.ENABLE_BENTOML_WORKER || 'false';
+const bentoWorkerEnabled = process.env.ENABLE_BENTOML_WORKER || 'true';
 const REDIS_URL = process.env.REDIS_URL || 'redis://myredis-headless';
 const CELERY_BROKER_URL = process.env.CELERY_BROKER_URL || 'amqp://admin:mypass@rabbitmq-service:5672';
 const CELERY_RESULT_BACKEND = process.env.CELERY_RESULT_BACKEND || 'redis://myredis-headless:6379/0';
-const YATAI_DEPLOYMENT_URL = process.env.YATAI_DEPLOYMENT_URL || 'http://emotion-analyzer-yatai.127.0.0.1.sslip.io/predict_async';
+const YATAI_DEPLOYMENT_URL = process.env.YATAI_DEPLOYMENT_URL || 'http://0.0.0.0:3000/predict_async';
 
 
 
@@ -32,7 +32,7 @@ app.get("/", (req, res) => {
 
 const celery = require('celery-node');
 
-if(celeryWorkerEnabled === 'true'){
+if (celeryWorkerEnabled === 'true') {
   var celery_app = celery.createClient(
     CELERY_BROKER_URL,
     CELERY_RESULT_BACKEND
@@ -44,17 +44,18 @@ const patients = io.of("/patients");
 const physicians = io.of("/physicians");
 
 // Initialize redis client.
-if(redisWorkerEnabled === 'true'){
+if (redisWorkerEnabled === 'true') {
   var client = redis.createClient(
-    {  url: REDIS_URL
+    {
+      url: REDIS_URL
     }
-    );
-  
+  );
+
   client.on("error", (err) => console.log("Redis client Error", err));
   (async () => {
     await client.connect();
     streamConsumer();
-  
+
   })();
 }
 
@@ -101,54 +102,68 @@ async function streamConsumer() {
 
 
 // Handle patient connections.
- patients.on("connection", (socket) => {
+patients.on("connection", (socket) => {
   console.log("patient connected");
   // Add image to redis' input stream and/or celery worker.
-  socket.on("image",  (msg) => {
+  socket.on("image", (msg) => {
     if (typeof msg.img === 'undefined') {
       console.log('Warning: Image event got triggered without an image attached.')
       return;
     }
     console.info(`Image of size ${msg.img.byteLength} received.`);
 
-    if(redisWorkerEnabled === 'true'){
+    if (redisWorkerEnabled === 'true') {
       client.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
 
     }
-    if(celeryWorkerEnabled === 'true'){
-      request = {"usr": msg.userId, "image": msg.img}
-      celery_app.sendTask("tasks.EmotionRecognition", undefined, {'request': request} )
+    if (celeryWorkerEnabled === 'true') {
+      request = { "usr": msg.userId, "image": msg.img }
+      celery_app.sendTask("tasks.EmotionRecognition", undefined, { 'request': request })
     }
-    if(bentoWorkerEnabled === 'true'){
+    if (bentoWorkerEnabled === 'true') {
       const formData = new FormData()
-      const annotations = {userId: msg.userId, conferenceId: msg.conferenceId }
+      const annotations = { userId: msg.userId, conferenceId: msg.conferenceId }
 
       formData.append('annotations', JSON.stringify(annotations))
       formData.append('image', msg.img, 'patient.png')
 
 
-    formData.submit(YATAI_DEPLOYMENT_URL, function(err, res) {
-      const body = []
-      res.on('data', 
-        (chunk) => body.push(chunk)
-      );
-      res.on('end', () => {
-        const resString = Buffer.concat(body).toString()
-        const emotions = JSON.parse(resString).emotions
-        console.log('Received BentoML Worker Result:')
-        console.log(emotions)
-        physicians
-        .to(emotions.userId)
-        .volatile.emit("emotion", JSON.stringify(emotions));
-      })
-    });
+      formData.submit(YATAI_DEPLOYMENT_URL, function (err, res) {
+        if (err) {
+          console.log(err);
+        }
+        else {
+          const body = []
+          res.on('data',
+            (chunk) => body.push(chunk)
+          );
+          res.on('end', () => {
+            try {
+              const resString = Buffer.concat(body).toString()
+              const reply = JSON.parse(resString)
+              console.log('Received BentoML Worker Result:')
+              console.log(reply)
+              console.log(reply.output.length)
+              if (reply.output.length > 0) {
+                physicians
+                  .to(reply.emotions.userId)
+                  .volatile.emit("emotion", JSON.stringify(reply.emotions));
+              }
+            }
+            catch (error) {
+              console.log('BentoML Worker Error:')
+              console.error(error);
+            }
+          })
+        }
+      });
 
 
     }
 
   });
 
-    
+
   socket.on("disconnect", (reason) => {
     console.log(`patient disconnected. Reason: ${reason}`);
   });
@@ -176,20 +191,20 @@ physicians.on("connection", function (socket) {
 io.on("connection", (socket) => {
   console.log("main namespace connected");
 
-// Handle incoming messages from celery worker.
-socket.on("send_result_to_server", (msg) => {
-  for (const patientResult of msg.data) {
-    console.log('Received Celery Worker Result:')
-    console.log(patientResult);
-    const  patientId = patientResult.userId;
-    physicians
-      .to(patientId)
-      .volatile.emit("emotion", patientResult.emotions);
-  }
-  
+  // Handle incoming messages from celery worker.
+  socket.on("send_result_to_server", (msg) => {
+    for (const patientResult of msg.data) {
+      console.log('Received Celery Worker Result:')
+      console.log(patientResult);
+      const patientId = patientResult.userId;
+      physicians
+        .to(patientId)
+        .volatile.emit("emotion", patientResult.emotions);
+    }
 
 
-});
+
+  });
 
   socket.on("chat message", (msg) => {
     // io.emit("chat message", msg);
