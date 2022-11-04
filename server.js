@@ -45,27 +45,36 @@ const physicians = io.of("/physicians");
 
 // Initialize redis client.
 if (redisWorkerEnabled === 'true') {
-  var client = redis.createClient(
-    {
-      url: REDIS_URL
-    }
-  );
-
-  client.on("error", (err) => console.log("Redis client Error", err));
+  const cluster = redis.createCluster({
+    rootNodes: [
+      {
+        url: 'redis://redis-cluster-0.redis-cluster:6379'
+      },
+      {
+        url: 'redis://redis-cluster-1.redis-cluster:6379'
+      },
+      {
+        url: 'redis://redis-cluster-2.redis-cluster:6379'
+      }
+    ]
+  });
+  
+  cluster.on("error", (err) => console.log("Redis cluster Error", err));
   (async () => {
-    await client.connect();
+    await cluster.connect();
     streamConsumer();
-
+  
   })();
+  
 }
 
-// consume new elements of output emotion stream
-async function streamConsumer() {
+ // consume new elements of output emotion stream
+ async function streamConsumer() {
   let currentId = "$"; // Use as last ID the maximum ID already stored in the stream
   let patientId;
   while (true) {
     try {
-      let response = await client.xRead(
+      let response = await cluster.xRead(
         redis.commandOptions({
           isolated: true,
         }),
@@ -73,12 +82,12 @@ async function streamConsumer() {
           // XREAD can read from multiple streams, starting at a
           // different ID for each...
           {
-            key: "main:results",
+            key: "input::results",
             id: currentId,
           },
         ],
         {
-          // Read 1 entry at a time, block for 5 seconds if there are none.
+          // Read 1 entry at a time, block basically forever if there are none.
           COUNT: 1,
           BLOCK: 50000,
         }
@@ -86,8 +95,6 @@ async function streamConsumer() {
 
       if (response) {
         patientId = response[0].messages[0].message.userId;
-        console.log('Received Redis Worker Result:')
-        console.log(response[0].messages[0].message);
         physicians
           .to(patientId)
           .volatile.emit("emotion", response[0].messages[0].message.emotions);
@@ -113,7 +120,7 @@ patients.on("connection", (socket) => {
     console.info(`Image of size ${msg.img.byteLength} received.`);
 
     if (redisWorkerEnabled === 'true') {
-      client.xAdd("main", "*", msg, "MAXLEN", "~", "1000");
+      cluster.xAdd("input:", "*", msg, "MAXLEN", "~", "1000");
 
     }
     if (celeryWorkerEnabled === 'true') {
@@ -222,3 +229,4 @@ io.on("connection", (socket) => {
 http.listen(port, () => {
   console.log(`Socket.IO server running at http://localhost:${port}/`);
 });
+
