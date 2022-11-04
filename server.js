@@ -80,7 +80,7 @@ if (redisWorkerEnabled === 'true') {
           // XREAD can read from multiple streams, starting at a
           // different ID for each...
           {
-            key: "input::results",
+            key: "input:results",
             id: currentId,
           },
         ],
@@ -121,7 +121,7 @@ patients.on("connection", (socket) => {
     console.info(`Image of size ${msg.img.byteLength} received.`);
 
     if (redisWorkerEnabled === 'true') {
-      cluster.xAdd("input:", "*", msg, "MAXLEN", "~", "1000");
+      cluster.xAdd("input", "*", msg, "MAXLEN", "~", "1000");
 
     }
     if (celeryWorkerEnabled === 'true') {
