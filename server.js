@@ -45,16 +45,16 @@ const physicians = io.of("/physicians");
 
 // Initialize redis client.
 if (redisWorkerEnabled === 'true') {
-  const cluster = redis.createCluster({
+  var cluster = redis.createCluster({
     rootNodes: [
       {
-        url: 'redis://redis-cluster-0.redis-cluster:6379'
+        url: 'redis://redis-cluster-0.redis-cluster-headless:6379'
       },
       {
-        url: 'redis://redis-cluster-1.redis-cluster:6379'
+        url: 'redis://redis-cluster-1.redis-cluster-headless:6379'
       },
       {
-        url: 'redis://redis-cluster-2.redis-cluster:6379'
+        url: 'redis://redis-cluster-2.redis-cluster-headless:6379'
       }
     ]
   });
@@ -66,9 +66,7 @@ if (redisWorkerEnabled === 'true') {
   
   })();
   
-}
-
- // consume new elements of output emotion stream
+   // consume new elements of output emotion stream
  async function streamConsumer() {
   let currentId = "$"; // Use as last ID the maximum ID already stored in the stream
   let patientId;
@@ -106,6 +104,9 @@ if (redisWorkerEnabled === 'true') {
     }
   }
 }
+}
+
+
 
 
 // Handle patient connections.
