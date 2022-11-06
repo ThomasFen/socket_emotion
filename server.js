@@ -21,7 +21,9 @@ const CELERY_BROKER_URL = process.env.CELERY_BROKER_URL || 'amqp://admin:mypass@
 const CELERY_RESULT_BACKEND = process.env.CELERY_RESULT_BACKEND || 'redis://myredis-headless:6379/0';
 const YATAI_DEPLOYMENT_URL = process.env.YATAI_DEPLOYMENT_URL || 'http://0.0.0.0:3000/predict_async';
 
-
+// Keep track of analyzed users and last message IDs received from Redis streams.
+// Only needed for Redis. Key: user_id. Value: message_id 
+const analyzed_users = {} 
 
 const redis = require("redis");
 
@@ -68,36 +70,34 @@ if (redisWorkerEnabled === 'true') {
   
    // consume new elements of output emotion stream
  async function streamConsumer() {
-  let currentId = "$"; // Use as last ID the maximum ID already stored in the stream
-  let patientId;
   while (true) {
     try {
       let response = await cluster.xRead(
         redis.commandOptions({
           isolated: true,
         }),
-        [
-          // XREAD can read from multiple streams, starting at a
-          // different ID for each...
-          {
-            key: "input:results",
-            id: currentId,
-          },
-        ],
+        Object.entries(analyzed_users).map(e => ({key:`output:results:{${e[0]}}`, id: e[1]}))
+       ,
         {
-          // Read 1 entry at a time, block basically forever if there are none.
-          COUNT: 1,
-          BLOCK: 50000,
+          // Read at maximum 20 entries at a time of every stream. Block basically forever if there are none. 
+          // Block gets released as soon as 1 message is available. i.e. BLOCK n + COUNT m will return one message.
+          COUNT: 20,
+          BLOCK: 999999,
         }
       );
 
       if (response) {
-        patientId = response[0].messages[0].message.userId;
-        physicians
-          .to(patientId)
-          .volatile.emit("emotion", response[0].messages[0].message.emotions);
-        // Get the ID of the first (only) entry returned.
-        currentId = response[0].messages[0].id;
+        for (const stream of response) {
+          const messages_length = stream.messages?.length;
+          if(messages_length){
+            const userId = stream.messages[0].message.userId;
+            // TODO Check if assumption that messages of Redis response are ordered by auto-generated id is right.
+            analyzed_users.userId = stream.messages[messages_length-1].id;
+          }
+          for (const result of stream) {
+            physicians.to(userId).volatile.emit("emotion", result.message.emotions);
+          }
+        }
       }
     } catch (err) {
       console.error(err);
@@ -121,7 +121,7 @@ patients.on("connection", (socket) => {
     console.info(`Image of size ${msg.img.byteLength} received.`);
 
     if (redisWorkerEnabled === 'true') {
-      cluster.xAdd("input", "*", msg, "MAXLEN", "~", "1000");
+      cluster.xAdd(`input:emotions:{${msg.userId}}`, "*", msg, "MAXLEN", "~", "1000");
 
     }
     if (celeryWorkerEnabled === 'true') {
@@ -183,9 +183,12 @@ physicians.on("connection", function (socket) {
 
   socket.on("subscribe", function (patientId) {
     socket.join(patientId);
+    // Start with maximum ID that's already stored in Redis.
+    analyzed_users.patientId = '$'
   });
   socket.on("unsubscribe", function (patientId) {
     socket.leave(patientId);
+    delete analyzed_users.patientId;
   });
 
   socket.on("disconnect", (reason) => {
