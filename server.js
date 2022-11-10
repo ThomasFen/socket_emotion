@@ -18,6 +18,10 @@ const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || "false";
 const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || "false";
 const bentoWorkerEnabled = process.env.ENABLE_BENTOML_WORKER || "true";
 const REDIS_CHART_NAME = process.env.REDIS_CHART_NAME || "myredis";
+const REDIS_CHART_FULL_NAME =
+  REDIS_CHART_NAME === "redis-cluster"
+    ? REDIS_CHART_NAME
+    : `${REDIS_CHART_NAME}-redis-cluster`;
 const CELERY_BROKER_URL =
   process.env.CELERY_BROKER_URL || "amqp://admin:mypass@rabbitmq-service:5672";
 const CELERY_RESULT_BACKEND =
@@ -50,13 +54,13 @@ if (redisWorkerEnabled === "true") {
   var cluster = redis.createCluster({
     rootNodes: [
       {
-        url: `redis://${REDIS_CHART_NAME}-0.${REDIS_CHART_NAME}-headless:6379`,
+        url: `redis://${REDIS_CHART_FULL_NAME}-0.${REDIS_CHART_FULL_NAME}-headless:6379`,
       },
       {
-        url: `redis://${REDIS_CHART_NAME}-1.${REDIS_CHART_NAME}-headless:6379`,
+        url: `redis://${REDIS_CHART_FULL_NAME}-1.${REDIS_CHART_FULL_NAME}-headless:6379`,
       },
       {
-        url: `redis://${REDIS_CHART_NAME}-2.${REDIS_CHART_NAME}-headless:6379`,
+        url: `redis://${REDIS_CHART_FULL_NAME}-2.${REDIS_CHART_FULL_NAME}-headless:6379`,
       },
     ],
   });
