@@ -50,13 +50,13 @@ if (redisWorkerEnabled === "true") {
   var cluster = redis.createCluster({
     rootNodes: [
       {
-        url: "redis://redis-cluster-0.redis-cluster-headless:6379",
+        url: "redis://myredis-0.myredis-headless:6379",
       },
       {
-        url: "redis://redis-cluster-1.redis-cluster-headless:6379",
+        url: "redis://myredis-1.myredis-headless:6379",
       },
       {
-        url: "redis://redis-cluster-2.redis-cluster-headless:6379",
+        url: "redis://myredis-2.myredis-headless:6379",
       },
     ],
   });
