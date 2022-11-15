@@ -12,6 +12,6 @@ RUN useradd -r -u 1001 -g root nonroot
 RUN chown -R nonroot /app
 USER nonroot
 
-ENV PORT="3001"
+ENV PORT="8010"
 
 CMD [ "node", "server.js" ]
