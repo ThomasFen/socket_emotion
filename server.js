@@ -13,7 +13,7 @@ const io = require("socket.io")(http, {
   },
   maxHttpBufferSize: 1e8,
 });
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 8010;
 const redisWorkerEnabled = process.env.ENABLE_REDIS_WORKER || "false";
 const celeryWorkerEnabled = process.env.ENABLE_CELERY_WORKER || "false";
 const bentoWorkerEnabled = process.env.ENABLE_BENTOML_WORKER || "true";
